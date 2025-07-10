@@ -1,37 +1,39 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import { Alert, Button, StyleSheet, Text, TextInput, View } from "react-native";
 
-export default function LoginScreen() {
+export default function RegisterScreen() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const router = useRouter();
 
-  const handleLogin = async () => {
+  const handleRegister = async () => {
+    if (!username.trim() || !password.trim()) {
+      Alert.alert("Hata.!", "Lütfen kullanıcı adı ve şifre girin.");
+      return;
+    }
     try {
-      const response = await fetch("http://167.99.193.95:5000/login", {
+      const response = await fetch("http://167.99.193.95:5000/register", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({ username, password }),
       });
       const data = await response.json();
-
-      if (data.token) {
-        await AsyncStorage.setItem("token", data.token);
-        Alert.alert("Başarılı", "Giriş başarılı");
-        router.replace("/todos");
+      if (response.ok) {
+        Alert.alert("Başarılı :)", "Kayıt başaralı, giriş yapabilirisiniz.");
+        router.replace("/login");
       } else {
-        Alert.alert("Hata", data.error || "Kullanıcı adı veya şifre yanlış.");
+        Alert.alert("Hata.!", data.error || "Kayıt olunamadı.");
       }
     } catch (error) {
-      Alert.alert("Sunucu Hatası!", "Sunucuya erişilemedi.");
+      Alert.alert("Suncu hatası.!", "Sunucuuya bağlanmadı.");
     }
   };
-
   return (
     <View style={styles.container}>
-      <Text style={styles.header}>Giriş Yap</Text>
+      <Text style={styles.header}>Kayıt Ol</Text>
       <TextInput
         style={styles.input}
         placeholder="Kullanıcı Adı"
@@ -48,12 +50,10 @@ export default function LoginScreen() {
         onChangeText={setPassword}
         secureTextEntry
       />
-      <Button title="Giriş Yap" onPress={handleLogin} />
-      <View style={{ height: 10 }} />
+      <Button title="Kayıt Ol" onPress={handleRegister} />
       <Button
-        title="Kayıt Ol"
-        onPress={() => router.replace("/register")}
-        color="#888"
+        title="Giriş Ekranına Dön"
+        onPress={() => router.replace("/login")}
       />
     </View>
   );
@@ -67,7 +67,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: 20,
   },
-  header: { fontSize: 36, marginBottom: 30, color: "#000" },
+  header: { fontSize: 32, marginBottom: 30, color: "#000" },
   input: {
     width: "100%",
     borderWidth: 1,
