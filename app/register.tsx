@@ -54,6 +54,7 @@ export default function RegisterScreen() {
       <Button
         title="Giriş Ekranına Dön"
         onPress={() => router.replace("/login")}
+        color="#adff2f"
       />
     </View>
   );

@@ -53,7 +53,7 @@ export default function LoginScreen() {
       <Button
         title="Kayıt Ol"
         onPress={() => router.replace("/register")}
-        color="#888"
+        color="#adff2f"
       />
     </View>
   );
