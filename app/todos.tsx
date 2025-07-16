@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Picker } from "@react-native-picker/picker";
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
@@ -6,6 +7,7 @@ import {
   Alert,
   Button,
   FlatList,
+  Switch,
   Text,
   TextInput,
   TouchableOpacity,
@@ -19,6 +21,13 @@ export default function TodosScreen() {
   const [newTodo, setNewTodo] = useState("");
   const [editId, setEditId] = useState(null);
   const [editTitle, setEditTitle] = useState("");
+  const [searchText, setSearchText] = useState("");
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(10);
+  const [totalTodos, setTotalTodos] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [hideComplete, setHideComplete] = useState(false);
+
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
@@ -28,17 +37,23 @@ export default function TodosScreen() {
   const borderColor = isDark ? "#333" : "#aaa";
 
   const fetchTodos = async () => {
+    setLoading(true);
     const token = await AsyncStorage.getItem("token");
     if (!token) {
       router.replace("/login");
       return;
     }
     try {
-      const response = await fetch("http://167.99.193.95:5000/todos", {
+      const params = `?page=${page}&limit=${limit}&search=${encodeURIComponent(
+        searchText
+      )}&shouldHideCompleted=${hideComplete}`;
+      const response = await fetch("http://167.99.193.95:5000/todos" + params, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await response.json();
       setTodos(data.todos || []);
+      setTotalTodos(data.totalTodos || 0);
+      setTotalPages(data.totalPages || 1);
     } catch (error) {
       await AsyncStorage.removeItem("token");
       router.replace("/login");
@@ -49,7 +64,11 @@ export default function TodosScreen() {
 
   useEffect(() => {
     fetchTodos();
-  }, []);
+  }, [page, limit, searchText, hideComplete]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [searchText, limit, hideComplete]);
 
   const handleLogout = async () => {
     await AsyncStorage.removeItem("token");
@@ -69,16 +88,15 @@ export default function TodosScreen() {
         },
         body: JSON.stringify({ title: newTodo }),
       });
-      const data = await response.json();
       if (response.ok) {
         setNewTodo("");
         fetchTodos();
       } else {
         Alert.alert("Hata.!", response.statusText);
-        setLoading(false);
       }
     } catch (error) {
       Alert.alert("Hata.!", "Sunucuya bağlanmadı.");
+    } finally {
       setLoading(false);
     }
   };
@@ -96,6 +114,7 @@ export default function TodosScreen() {
       fetchTodos();
     } catch (error) {
       Alert.alert("Hata.!", "Todo silinemdi.");
+    } finally {
       setLoading(false);
     }
   };
@@ -122,10 +141,10 @@ export default function TodosScreen() {
         fetchTodos();
       } else {
         Alert.alert("Hata.!", "Todo güncellenemedi.");
-        setLoading(false);
       }
     } catch (error) {
       Alert.alert("Hata.!", "Sunucuya bağlanamadı.");
+    } finally {
       setLoading(false);
     }
   };
@@ -134,20 +153,27 @@ export default function TodosScreen() {
     setLoading(true);
     const token = await AsyncStorage.getItem("token");
     try {
-      const response = await fetch("http://167.99.193.95:5000/todos/" + id + "/complete", {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ completed: !currentStatus }),
-      });
+      const response = await fetch(
+        "http://167.99.193.95:5000/todos/" + id + "/complete",
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ completed: !currentStatus }),
+        }
+      );
       fetchTodos();
     } catch (error) {
       Alert.alert("Hata.!", "Todo tamamlama durumu güncellenemedi. ");
+    } finally {
       setLoading(false);
     }
   };
+
+  const start = totalTodos === 0 ? 0 : (page - 1) * limit + 1;
+  const end = totalTodos === 0 ? 0 : start + todos.length - 1;
 
   if (loading)
     return <ActivityIndicator size="large" color={isDark ? "#fff" : "#333"} />;
@@ -155,6 +181,7 @@ export default function TodosScreen() {
   return (
     <View style={{ flex: 1, padding: 24, backgroundColor }}>
       <Button title="Çıkış Yap" onPress={handleLogout} />
+
       <View style={{ flexDirection: "row", marginVertical: 12 }}>
         <TextInput
           value={newTodo}
@@ -174,6 +201,50 @@ export default function TodosScreen() {
         />
         <Button title="Ekle ➕" onPress={handleAddTodo} />
       </View>
+
+      <View style={{ flexDirection: "row", marginBottom: 12 }}>
+        <TextInput
+          placeholder="Ara..."
+          placeholderTextColor={isDark ? "#aaa" : "#888"}
+          value={searchText}
+          onChangeText={setSearchText}
+          style={{
+            flex: 1,
+            borderWidth: 1,
+            borderColor: borderColor,
+            borderRadius: 6,
+            padding: 8,
+            marginBottom: 12,
+            backgroundColor: isDark ? "#222" : "#fff",
+            color: textColor,
+          }}
+          clearButtonMode="while-editing"
+        />
+      </View>
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          marginBottom: 10,
+        }}
+      >
+        <Switch
+          value={hideComplete}
+          onValueChange={setHideComplete}
+          thumbColor={hideComplete ? "#4caf50" : "#ccc"}
+          trackColor={{ false: "#aaa", true: "#4caf50" }}
+        />
+        <Text
+          style={{
+            color: textColor,
+            marginLeft: 8,
+            fontWeight: "bold",
+          }}
+        >
+          Tamamlananları Gizle 🙈
+        </Text>
+      </View>
+
       <FlatList
         data={todos}
         keyExtractor={(item) => item._id}
@@ -276,6 +347,55 @@ export default function TodosScreen() {
           </View>
         )}
       />
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "center",
+          marginTop: 16,
+          marginBottom: 80,
+        }}
+      >
+        <Text style={{ color: textColor }}>Sayfa başına satır:</Text>
+        <Picker
+          selectedValue={limit}
+          onValueChange={setLimit}
+          style={{
+            height: 30,
+            width: 90,
+            color: textColor,
+            marginLeft: 6,
+            marginRight: 16,
+          }}
+          dropdownIconColor={textColor}
+        >
+          <Picker.Item label="5" value={5} />
+          <Picker.Item label="10" value={10} />
+          <Picker.Item label="50" value={50} />
+          <Picker.Item label="100" value={100} />
+          <Picker.Item label="1000" value={1000} />
+        </Picker>
+        <TouchableOpacity
+          onPress={() => setPage((prev) => Math.max(1, prev - 1))}
+          disabled={page === 1}
+          style={{ padding: 6, opacity: page === 1 ? 0.4 : 1 }}
+        >
+          <Text style={{ fontSize: 18, color: textColor }}>{"<"}</Text>
+        </TouchableOpacity>
+        <Text style={{ marginHorizontal: 12, color: textColor }}>
+          {start}-{end} / {totalTodos}
+        </Text>
+        <TouchableOpacity
+          onPress={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+          disabled={page === totalPages || totalTodos === 0}
+          style={{
+            padding: 6,
+            opacity: page === totalPages || totalTodos === 0 ? 0.4 : 1,
+          }}
+        >
+          <Text style={{ fontSize: 18, color: textColor }}>{">"}</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
