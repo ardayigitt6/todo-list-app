@@ -27,6 +27,7 @@ export default function TodosScreen() {
   const [totalTodos, setTotalTodos] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [hideComplete, setHideComplete] = useState(false);
+  const [newestFirst, setNewestFirst] = useState(true);
 
   const router = useRouter();
   const colorScheme = useColorScheme();
@@ -36,17 +37,20 @@ export default function TodosScreen() {
   const backgroundColor = isDark ? "#121212" : "#fff";
   const borderColor = isDark ? "#333" : "#aaa";
 
-  const fetchTodos = async () => {
-    setLoading(true);
+  const fetchTodos = async (showLoading = true) => {
+    if (showLoading) setLoading(true);
     const token = await AsyncStorage.getItem("token");
     if (!token) {
+      if (showLoading) setLoading(false);
       router.replace("/login");
       return;
     }
+    const sortOrder = newestFirst ? "desc" : "asc";
+    const params = `?page=${page}&limit=${limit}&search=${encodeURIComponent(
+      searchText
+    )}&shouldHideCompleted=${hideComplete}&sortOrder=${sortOrder}`;
+
     try {
-      const params = `?page=${page}&limit=${limit}&search=${encodeURIComponent(
-        searchText
-      )}&shouldHideCompleted=${hideComplete}`;
       const response = await fetch("http://167.99.193.95:5000/todos" + params, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -56,6 +60,7 @@ export default function TodosScreen() {
       setTotalPages(data.totalPages || 1);
     } catch (error) {
       await AsyncStorage.removeItem("token");
+      if (showLoading) setLoading(false);
       router.replace("/login");
     } finally {
       setLoading(false);
@@ -63,12 +68,12 @@ export default function TodosScreen() {
   };
 
   useEffect(() => {
-    fetchTodos();
-  }, [page, limit, searchText, hideComplete]);
+    fetchTodos(false);
+  }, [page, limit, searchText, hideComplete, newestFirst]);
 
   useEffect(() => {
     setPage(1);
-  }, [searchText, limit, hideComplete]);
+  }, [searchText, limit, hideComplete, newestFirst]);
 
   const handleLogout = async () => {
     await AsyncStorage.removeItem("token");
@@ -90,7 +95,7 @@ export default function TodosScreen() {
       });
       if (response.ok) {
         setNewTodo("");
-        fetchTodos();
+        await fetchTodos(true);
       } else {
         Alert.alert("Hata.!", response.statusText);
       }
@@ -105,13 +110,13 @@ export default function TodosScreen() {
     setLoading(true);
     const token = await AsyncStorage.getItem("token");
     try {
-      const response = await fetch("http://167.99.193.95:5000/todos/" + id, {
+      await fetch("http://167.99.193.95:5000/todos/" + id, {
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${token}`,
         },
       });
-      fetchTodos();
+      await fetchTodos(true);
     } catch (error) {
       Alert.alert("Hata.!", "Todo silinemdi.");
     } finally {
@@ -138,7 +143,7 @@ export default function TodosScreen() {
       if (response.ok) {
         setEditId(null);
         setEditTitle("");
-        fetchTodos();
+        await fetchTodos(true);
       } else {
         Alert.alert("Hata.!", "Todo güncellenemedi.");
       }
@@ -153,18 +158,15 @@ export default function TodosScreen() {
     setLoading(true);
     const token = await AsyncStorage.getItem("token");
     try {
-      const response = await fetch(
-        "http://167.99.193.95:5000/todos/" + id + "/complete",
-        {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ completed: !currentStatus }),
-        }
-      );
-      fetchTodos();
+      await fetch("http://167.99.193.95:5000/todos/" + id + "/complete", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ completed: !currentStatus }),
+      });
+      await fetchTodos(true);
     } catch (error) {
       Alert.alert("Hata.!", "Todo tamamlama durumu güncellenemedi. ");
     } finally {
@@ -177,6 +179,112 @@ export default function TodosScreen() {
 
   if (loading)
     return <ActivityIndicator size="large" color={isDark ? "#fff" : "#333"} />;
+
+  const renderItem = ({ item }) => (
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        marginBottom: 6,
+      }}
+    >
+      <TouchableOpacity
+        onPress={() => handleToggleComplete(item._id, item.completed)}
+        style={{
+          width: 24,
+          height: 24,
+          borderRadius: 12,
+          borderWidth: 2,
+          borderColor: item.completed ? "#4caf50" : "#aaa",
+          alignItems: "center",
+          justifyContent: "center",
+          marginRight: 8,
+          backgroundColor: isDark ? "#222" : "#fff",
+        }}
+      >
+        {item.completed && (
+          <Text style={{ fontSize: 18, color: "#4caf50", fontWeight: "bold" }}>
+            ✓
+          </Text>
+        )}
+      </TouchableOpacity>
+
+      <View style={{ flex: 1 }}>
+        {editId === item._id ? (
+          <>
+            <TextInput
+              value={editTitle}
+              onChangeText={setEditTitle}
+              style={{
+                borderColor: borderColor,
+                borderWidth: 1,
+                borderRadius: 6,
+                padding: 4,
+                marginRight: 8,
+                backgroundColor: isDark ? "#222" : "#fff",
+                color: textColor,
+              }}
+            />
+            <Button title="Kaydet" onPress={() => handleUpdate(item._id)} />
+            <Button
+              title="İptal"
+              color="grey"
+              onPress={() => {
+                setEditId(null);
+                setEditTitle("");
+              }}
+            />
+          </>
+        ) : (
+          <>
+            <Text
+              style={{
+                color: textColor,
+                textDecorationLine: item.completed ? "line-through" : "none",
+                opacity: item.completed ? 0.5 : 1,
+                fontSize: 16,
+              }}
+            >
+              {item.title}
+            </Text>
+            <Text
+              style={{
+                color: "#aaa",
+                fontSize: 11,
+                fontStyle: "italic",
+                marginLeft: 2,
+                marginTop: 1,
+              }}
+            >
+              {new Date(item.createdAt).toLocaleString()}
+            </Text>
+          </>
+        )}
+      </View>
+
+      <TouchableOpacity onPress={() => handleDeleteTodo(item._id)}>
+        <Text style={{ color: "red", fontWeight: "bold", marginLeft: 12 }}>
+          Sil 🗑
+        </Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        onPress={() => {
+          setEditId(item._id);
+          setEditTitle(item.title);
+        }}
+      >
+        <Text
+          style={{
+            color: "orange",
+            fontWeight: "bold",
+            marginLeft: 12,
+          }}
+        >
+          Düzenle ✏️
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
 
   return (
     <View style={{ flex: 1, padding: 24, backgroundColor }}>
@@ -226,127 +334,56 @@ export default function TodosScreen() {
           flexDirection: "row",
           alignItems: "center",
           marginBottom: 10,
+          justifyContent: "space-between",
         }}
       >
-        <Switch
-          value={hideComplete}
-          onValueChange={setHideComplete}
-          thumbColor={hideComplete ? "#4caf50" : "#ccc"}
-          trackColor={{ false: "#aaa", true: "#4caf50" }}
-        />
-        <Text
-          style={{
-            color: textColor,
-            marginLeft: 8,
-            fontWeight: "bold",
-          }}
-        >
-          Tamamlananları Gizle 🙈
-        </Text>
+        <View style={{ flexDirection: "row", alignItems: "center" }}>
+          <Switch
+            value={hideComplete}
+            onValueChange={setHideComplete}
+            thumbColor={hideComplete ? "#ccc" : "#c8e6c9"}
+            trackColor={{ false: "#aaa", true: "#4caf50" }}
+          />
+          <Text
+            style={{
+              color: textColor,
+              marginLeft: 8,
+              fontWeight: "bold",
+              fontSize: 13,
+            }}
+          >
+            {hideComplete
+              ? "Tamamlananları Göster 👀 "
+              : "Tamamlananları Gizle 🙈 "}
+          </Text>
+        </View>
+        <View style={{ flexDirection: "row", alignItems: "center" }}>
+          <Switch
+            value={newestFirst}
+            onValueChange={setNewestFirst}
+            thumbColor={hideComplete ? "#ccc" : "#c8e6c9"}
+            trackColor={{ false: "#aaa", true: "#4caf50" }}
+          />
+          <Text
+            style={{
+              color: textColor,
+              marginLeft: 8,
+              fontWeight: "bold",
+              fontSize: 13,
+            }}
+          >
+            {newestFirst ? "Yenileri Göster ⬆️" : "Eskileri Göster ⬇️ "}
+          </Text>
+        </View>
       </View>
 
       <FlatList
         data={todos}
+        extraData={newestFirst}
         keyExtractor={(item) => item._id}
-        renderItem={({ item }) => (
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              marginBottom: 6,
-            }}
-          >
-            <TouchableOpacity
-              onPress={() => handleToggleComplete(item._id, item.completed)}
-              style={{
-                width: 24,
-                height: 24,
-                borderRadius: 12,
-                borderWidth: 2,
-                borderColor: item.completed ? "#4caf50" : "#aaa",
-                alignItems: "center",
-                justifyContent: "center",
-                marginRight: 8,
-                backgroundColor: isDark ? "#222" : "#fff",
-              }}
-            >
-              {item.completed && (
-                <Text
-                  style={{ fontSize: 18, color: "#4caf50", fontWeight: "bold" }}
-                >
-                  ✓
-                </Text>
-              )}
-            </TouchableOpacity>
-
-            {editId === item._id ? (
-              <>
-                <TextInput
-                  value={editTitle}
-                  onChangeText={setEditTitle}
-                  style={{
-                    flex: 1,
-                    borderColor: borderColor,
-                    borderWidth: 1,
-                    borderRadius: 6,
-                    padding: 4,
-                    marginRight: 8,
-                    backgroundColor: isDark ? "#222" : "#fff",
-                    color: textColor,
-                  }}
-                />
-                <Button title="Kaydet" onPress={() => handleUpdate(item._id)} />
-                <Button
-                  title="İptal"
-                  color="grey"
-                  onPress={() => {
-                    setEditId(null);
-                    setEditTitle("");
-                  }}
-                />
-              </>
-            ) : (
-              <>
-                <Text
-                  style={{
-                    color: textColor,
-                    flex: 1,
-                    textDecorationLine: item.completed
-                      ? "line-through"
-                      : "none",
-                    opacity: item.completed ? 0.5 : 1,
-                  }}
-                >
-                  {item.title}
-                </Text>
-                <TouchableOpacity onPress={() => handleDeleteTodo(item._id)}>
-                  <Text
-                    style={{ color: "red", fontWeight: "bold", marginLeft: 12 }}
-                  >
-                    Sil 🗑
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => {
-                    setEditId(item._id);
-                    setEditTitle(item.title);
-                  }}
-                >
-                  <Text
-                    style={{
-                      color: "orange",
-                      fontWeight: "bold",
-                      marginLeft: 12,
-                    }}
-                  >
-                    Düzenle ✏️
-                  </Text>
-                </TouchableOpacity>
-              </>
-            )}
-          </View>
-        )}
+        renderItem={renderItem}
       />
+
       <View
         style={{
           flexDirection: "row",

@@ -25,7 +25,7 @@ export default function LoginScreen() {
         Alert.alert("Hata", data.error || "Kullanıcı adı veya şifre yanlış.");
       }
     } catch (error) {
-      Alert.alert("Sunucu Hatası!", "Sunucuya erişilemedi.");
+      Alert.alert("Hata.!", "Girilen kullanıcı adı ve şifre eşleşmedi.");
     }
   };
 
